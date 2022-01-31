@@ -1,0 +1,195 @@
+SET ThousandSep=' ';
+SET DecimalSep=',';
+SET MoneyThousandSep=' ';
+SET MoneyDecimalSep=',';
+SET MoneyFormat='# ##0,00 ₽;-# ##0,00 ₽';
+SET TimeFormat='h:mm:ss';
+SET DateFormat='DD.MM.YYYY';
+SET TimestampFormat='DD.MM.YYYY h:mm:ss[.fff]';
+SET FirstWeekDay=0;
+SET BrokenWeeks=1;
+SET ReferenceDay=0;
+SET FirstMonthOfYear=1;
+SET CollationLocale='ru-RU';
+SET CreateSearchIndexOnReload=1;
+SET MonthNames='янв.;февр.;мар.;апр.;мая;июн.;июл.;авг.;сент.;окт.;нояб.;дек.';
+SET LongMonthNames='январь;февраль;март;апрель;май;июнь;июль;август;сентябрь;октябрь;ноябрь;декабрь';
+SET DayNames='пн;вт;ср;чт;пт;сб;вс';
+SET LongDayNames='понедельник;вторник;среда;четверг;пятница;суббота;воскресенье';
+SET NumericalAbbreviation='3:k;6:M;9:G;12:T;15:P;18:E;21:Z;24:Y;-3:m;-6:μ;-9:n;-12:p;-15:f;-18:a;-21:z;-24:y';
+
+LIB CONNECT TO 'nothwing';
+
+orders_t:
+LOAD
+    order_id,
+    customer_id,
+    employee_id,
+    Date(order_date, 'DD.MM.YYYY') as order_date,
+    Date(required_date, 'DD.MM.YYYY') as required_date,
+    Date(shipped_date, 'DD.MM.YYYY') as shipped_date,
+    ship_via,
+    freight,
+    ship_name,
+    ship_address,
+    ship_city,
+    ship_region,
+    ship_postal_code,
+    ship_country
+FROM [lib://case/order.csv] 
+(txt, utf8, embedded labels, delimiter is ';', msq);
+
+NoConcatenate
+orders:
+Load *
+Resident orders_t
+order by order_date;
+
+// Определение дат начала и окончания диапазона 
+TempMinMaxDates:
+LOAD   
+       Min(order_date) as MinDate, 
+       Max(required_date) as MaxDate
+RESIDENT orders;
+ 
+LET varMinDate = Num(FieldValue('MinDate', 1));
+LET varMaxDate = Num(FieldValue('MaxDate', 1)); 
+ 
+Drop Table TempMinMaxDates;
+ 
+// Формирование последовательности дат в диапазоне
+TempCalendar:
+LOAD
+       date ($(varMinDate) + rowno() - 1)      as TempDate
+AUTOGENERATE $(varMaxDate) - $(varMinDate) + 1;
+ 
+// Формирование календаря с иерархией периодов
+Календарь:
+LOAD         
+       [TempDate] as Дата,
+       Day([TempDate]) as [День], 
+       Week([TempDate]) as [Неделя],
+       WeekName([TempDate]) as [НеделяГод],
+       WeekDay([TempDate]) as [День Недели],
+       Month([TempDate]) as [Месяц],
+       MonthName([TempDate]) as [МесяцГод],
+       Dual('КВ'&Text(Div(Month([TempDate]),4)+1),Div(Month([TempDate]),4)+1)    as [Квартал],
+       QuarterName([TempDate]) as [КварталГод],
+       Year([TempDate]) as [Год]
+Resident TempCalendar;
+ 
+DROP Table TempCalendar;
+
+customer_t:
+LOAD
+    customer_id,
+    company_name,
+    contact_name,
+    contact_title,
+    address as address_cu,
+    city as city_cu,
+    region as region_cu,
+    postal_code as postal_code_cu,
+    country as country_cu,
+    phone,
+    fax
+FROM [lib://case/customers.csv]
+(txt, utf8, embedded labels, delimiter is ';', msq);
+
+NoConcatenate
+customers:
+LOAD *
+resident  customer_t
+order by contact_title;
+
+
+order_details:
+LOAD
+    order_id,
+    product_id,
+    unit_price as unit_price_or,
+    quantity as quantity_or,
+    discount as discount_or
+FROM [lib://case/order_details.csv]
+(txt, codepage is 28591, embedded labels, delimiter is ';', msq);
+
+
+prd_2:
+mapping LOAD * 
+Inline [
+prd_1t, quantity
+boxes, ящиков
+bags, мешки
+oz, унция
+ml, мл
+bottles, бутылки
+jars, банки
+lb, фунт
+pkgs., упаковка
+pkg., пакет
+g., гр.
+kg., кг.
+box, коробка
+tins, конс.банка
+pieces, кусок
+gift, подарочная
+pies, пироги
+
+];
+
+products:
+LOAD
+    product_id,
+    product_name,
+   ApplyMap('prd_2', SubField(quantity_per_unit, ' ', SubStringCount(quantity_per_unit, ' ') +1 ), 'перевод не найден') as quantity_per_unitF,
+    supplier_id,
+    category_id,
+    quantity_per_unit,
+    unit_price,
+    units_in_stock,
+    units_on_order,
+    reorder_level,
+    discontinued
+FROM [lib://case/products.csv]
+(txt, utf8, embedded labels, delimiter is ';', msq);
+
+employee_t:
+LOAD
+    employee_id,
+    title,
+    last_name,
+    first_name,    
+    title_of_courtesy,
+    Date(birth_date, 'DD.MM.YYYY') as birth_date,
+    Date(hire_date, 'DD.MM.YYYY') as hire_date,
+    address as address_em,
+    city as city_em,
+    region as region_em,
+    postal_code as postal_code_em,
+    country as country_em,
+    PurgeChar(home_phone, '- ') as home_phone,
+    "extension",
+    photo,
+    notes,
+    reports_to,
+    photo_path
+FROM [lib://case/employees.csv]
+(txt, codepage is 28591, embedded labels, delimiter is ';', msq);
+
+NoConcatenate
+employees:
+LOAD *
+resident  employee_t
+order by hire_date;
+
+
+LOAD
+    category_id,
+    category_name,
+    description,
+    picture
+FROM [lib://case/categories.csv]
+(txt, codepage is 28591, embedded labels, delimiter is ';', msq);
+
+drop Table  employee_t, customer_t, orders_t
+
