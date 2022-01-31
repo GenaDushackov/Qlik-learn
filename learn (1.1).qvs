@@ -82,7 +82,6 @@ FROM [$(File)]
 (biff, embedded labels, header is 2 lines, table is TDSheet$)
 Where not IsNull([Номенклатура])
 Group By [Артикул], [Номенклатура];
-
 Next File;
 
 Outer Join(KeyTable_tmp)
