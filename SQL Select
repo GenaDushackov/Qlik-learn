@@ -1,0 +1,45 @@
+with a1 as (select customers.company_name as company_name,
+count(orders.order_id) as sum_order,
+row_number () over (order by count(orders.order_id) desc) as top1
+from customers join orders on customers.customer_id = orders.customer_id
+group by customers.company_name
+order by sum_order desc),
+
+a2 as (select customers.company_name as company_name,
+count(distinct order_details.product_id) as sum_product,
+row_number () over (order by count(distinct order_details.product_id) desc) as top2
+from customers join orders on customers.customer_id = orders.customer_id
+join order_details on orders.order_id = order_details.order_id
+group by customers.company_name
+order by sum_product desc),
+
+a3 as (select customers.company_name,
+sum((unit_price - (unit_price*discount)) * cast (quantity as real)) as sum_price,
+row_number () over (order by sum((unit_price - (unit_price*discount)) * cast (quantity as real)) desc) as top3
+from customers join orders on customers.customer_id = orders.customer_id
+join order_details on orders.order_id = order_details.order_id
+group by customers.company_name
+order by sum_price desc),
+
+a4 as (select customers.company_name as company_name,
+employees.last_name as last_name,
+sum((unit_price - (unit_price*discount)) * cast (quantity as real)) as price,
+row_number () over (order by sum((unit_price - (unit_price*discount)) * cast (quantity as real)) desc) as top4
+from employees join orders on employees.employee_id = orders.employee_id
+join order_details on order_details.order_id = orders.order_id
+join customers on orders.customer_id = customers.customer_id
+group by company_name, last_name
+order by price desc)
+
+select a1.company_name,
+a1.sum_order,
+a2.company_name,
+a2.sum_product,
+a3.company_name,
+a3.sum_price,
+a4.company_name,
+a4.last_name,
+(a3.sum_price * 100 / a4.price) as doly_men
+from a1 join a2 on a1.top1 = a2.top2
+join a3 on a2.top2 = a3.top3
+join a4 on a3.top3 = a4.top4;
