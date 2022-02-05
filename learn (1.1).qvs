@@ -45,6 +45,7 @@ Load
 	key
 Resident Price;
 
+SET Date_test = 'MonthName(MakeDate('20'&Right(KeepChar(FileName(sourse),'0123456789'), 2), Left(Right(KeepChar(FileName(sourse),'0123456789'), 4),2),'01')) as date';
 
 
 For Each File in FileList ('lib://KORP/пр? ????.xls')
@@ -65,7 +66,7 @@ Next File;
 Outer Join (KeyTable_tmp)
 Load 
 key,
-MonthName(MakeDate('20'&Right(KeepChar(FileName(sourse),'0123456789'), 2), Left(Right(KeepChar(FileName(sourse),'0123456789'), 4),2),'01')) as date
+'$(Date_test)'
 Resident sales10;
 
 
@@ -87,7 +88,7 @@ Next File;
 Outer Join(KeyTable_tmp)
 Load
 key,
-MonthName(MakeDate('20'&Right(KeepChar(FileName(sourse),'0123456789'), 2), Left(Right(KeepChar(FileName(sourse),'0123456789'), 4),2),'01')) as date
+'$(Date_test)'
 Resident deletions;
 
 KeyTable:
@@ -102,6 +103,3 @@ Resident KeyTable_tmp;
 
 Drop Table KeyTable_tmp;
 Drop Field sourse;
-
-
-
